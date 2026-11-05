@@ -43,6 +43,7 @@ INCIDENT_SAMPLE_INTERVAL_S = 0.20
 SCAN_SETTLE_S = 0.40
 SCAN_SAMPLES_PER_POINT = 5
 SCAN_SAMPLE_INTERVAL_S = 0.10
+PROBE_POSITION_DELAY_S = 5
 METER_RESPONSE = 0.80  # Measured / actual; applies to BOTH measurements.
 
 
@@ -181,7 +182,7 @@ class SimpleAOMApp:
         scan.pack(fill="x", pady=6)
         ttk.Label(
             scan,
-            text="采用入射平均值后，把探头移到 double-pass 输出；扫描期间不要再动光路。",
+            text="点击开始并确认后有 5 秒放置探头；之后开始记录扫描数据。",
             wraplength=390,
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=8, pady=(7, 5))
         self._add_entry(scan, 1, "起点 (mVpp)", self.start_mvpp_var)
@@ -559,10 +560,10 @@ class SimpleAOMApp:
 
         message = (
             "请确认：\n\n"
-            "1. 功率计探头已经移到 double-pass 输出，并且只接收到目标输出光；\n"
+            "1. 点击确定后，5 秒内将探头移到 double-pass 输出；\n"
             "2. AOM、反射镜和光阑都不再移动；\n"
             "3. 功放增益与供电已经固定。\n\n"
-            f"确定后将固定 100 MHz，从 {points[0]:g} 扫到 {points[-1]:g} mVpp。"
+            f"确定后先等待 5 秒，再固定 100 MHz，从 {points[0]:g} 扫到 {points[-1]:g} mVpp。"
             + ("\n0 mVpp 点将关闭 RF 测量残光。" if points[0] == 0 else "")
         )
         if not messagebox.askokcancel("开始扫描", message):
@@ -574,6 +575,19 @@ class SimpleAOMApp:
             if self.simulation:
                 self.power_meter.mode = "scan"
             self.emit("scan_reset", {"total": len(points)})
+            # No points or data files are produced during positioning.
+            self.generator.output_off()
+            for remaining in range(PROBE_POSITION_DELAY_S, 0, -1):
+                if self.stop_event.is_set():
+                    self.emit("status", "扫描已取消；RF 关闭，未开始记录。")
+                    return
+                self.emit("status", f"请放置功率计探头：{remaining} 秒后开始扫描；RF 关闭。")
+                if not interruptible_sleep(self.stop_event, 1.0):
+                    self.emit("status", "扫描已取消；RF 关闭，未开始记录。")
+                    return
+            if self.stop_event.is_set():
+                self.emit("status", "扫描已取消；RF 关闭，未开始记录。")
+                return
             MEASUREMENT_DIR.mkdir(parents=True, exist_ok=True)
             stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             path = MEASUREMENT_DIR / f"{stamp}_double_pass_scan_corrected80.csv"
@@ -753,7 +767,7 @@ class SimpleAOMApp:
         elif kind == "scan_reset":
             self.scan_points = []
             self._reset_scan_plots()
-            self.status_var.set(f"扫描开始，共 {payload['total']} 个幅度点；0 点关闭 RF。")
+            self.status_var.set(f"准备扫描，共 {payload['total']} 个幅度点；先等待 5 秒放置探头。")
         elif kind == "scan_point":
             reading = payload["reading"]
             self.scan_points.append(reading)

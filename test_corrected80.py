@@ -60,6 +60,7 @@ class Corrected80Tests(unittest.TestCase):
         app._start_worker = lambda name, work: work()
         with tempfile.TemporaryDirectory() as folder, \
              patch.object(corrected, 'MEASUREMENT_DIR', Path(folder)), \
+             patch.object(corrected, 'PROBE_POSITION_DELAY_S', 0), \
              patch.object(corrected, 'SCAN_SETTLE_S', 0), \
              patch.object(corrected, 'SCAN_SAMPLE_INTERVAL_S', 0), \
              patch.object(corrected.messagebox, 'askokcancel', return_value=True):
