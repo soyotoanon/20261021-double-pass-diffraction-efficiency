@@ -97,7 +97,7 @@ class SimpleAOMApp:
         self.incident_stats_var = tk.StringVar(value="尚未完成入射测量（前 10 秒不计入）")
         self.accepted_var = tk.StringVar(value="尚未采用入射平均值（后 50 秒）")
         self.scan_live_var = tk.StringVar(value="Pdouble-pass = -- mW    η = -- %")
-        self.start_mvpp_var = tk.StringVar(value="300")
+        self.start_mvpp_var = tk.StringVar(value="0")
         self.stop_mvpp_var = tk.StringVar(value="550")
         self.step_mvpp_var = tk.StringVar(value="10")
         self.progress_var = tk.DoubleVar(value=0.0)
@@ -536,7 +536,7 @@ class SimpleAOMApp:
             if not math.isfinite(value):
                 raise ValueError(f"{label}必须是有限数值。")
             values.append(value)
-        return build_inclusive_points(*values)
+        return build_inclusive_points(*values, allow_zero=True)
 
     def start_scan(self) -> None:
         if self.generator is None or self.power_meter is None:
@@ -557,6 +557,7 @@ class SimpleAOMApp:
             "2. AOM、反射镜和光阑都不再移动；\n"
             "3. 功放增益与供电已经固定。\n\n"
             f"确定后将固定 100 MHz，从 {points[0]:g} 扫到 {points[-1]:g} mVpp。"
+            + ("\n0 mVpp 点将关闭 RF 测量残光。" if points[0] == 0 else "")
         )
         if not messagebox.askokcancel("开始扫描", message):
             return
@@ -587,13 +588,16 @@ class SimpleAOMApp:
                         ]
                     )
                     self.generator.prepare(RF_FREQUENCY_HZ)
-                    self.generator.set_amplitude_mvpp(points[0])
-                    self.generator.output_on()
                     for index, amplitude_mvpp in enumerate(points, start=1):
                         if self.stop_event.is_set():
                             stopped = True
                             break
-                        self.generator.set_amplitude_mvpp(amplitude_mvpp)
+                        if amplitude_mvpp == 0:
+                            self.generator.output_off()
+                        else:
+                            self.generator.set_amplitude_mvpp(amplitude_mvpp)
+                            if not self.generator.output_enabled and not self.stop_event.is_set():
+                                self.generator.output_on()
                         if not interruptible_sleep(self.stop_event, SCAN_SETTLE_S):
                             stopped = True
                             break
@@ -735,7 +739,7 @@ class SimpleAOMApp:
         elif kind == "scan_reset":
             self.scan_points = []
             self._reset_scan_plots()
-            self.status_var.set(f"扫描开始，共 {payload['total']} 个幅度点；RF 已开启。")
+            self.status_var.set(f"扫描开始，共 {payload['total']} 个幅度点；0 点关闭 RF。")
         elif kind == "scan_point":
             reading = payload["reading"]
             self.scan_points.append(reading)

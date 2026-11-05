@@ -58,7 +58,7 @@ class WorkPoint:
     at_scan_boundary: bool
 
 
-def build_inclusive_points(start_mvpp: float, stop_mvpp: float, step_mvpp: float) -> list[float]:
+def build_inclusive_points(start_mvpp: float, stop_mvpp: float, step_mvpp: float, *, allow_zero: bool = False) -> list[float]:
     """Return an inclusive ascending grid without floating-point endpoint loss."""
     for name, value in (
         ("起点", start_mvpp),
@@ -67,8 +67,8 @@ def build_inclusive_points(start_mvpp: float, stop_mvpp: float, step_mvpp: float
     ):
         if not math.isfinite(value):
             raise ValueError(f"{name}必须是有限数值。")
-    if start_mvpp <= 0:
-        raise ValueError("扫描起点必须大于 0 mVpp。")
+    if start_mvpp < 0 or (start_mvpp == 0 and not allow_zero):
+        raise ValueError("扫描起点必须大于或等于 0 mVpp。" if allow_zero else "扫描起点必须大于 0 mVpp。")
     if stop_mvpp < start_mvpp:
         raise ValueError("扫描终点必须不小于起点。")
     if stop_mvpp > HARD_MAX_MVPP + 1e-9:
@@ -80,6 +80,8 @@ def build_inclusive_points(start_mvpp: float, stop_mvpp: float, step_mvpp: float
     points = [round(start_mvpp + index * step_mvpp, 9) for index in range(count + 1)]
     if not math.isclose(points[-1], stop_mvpp, rel_tol=0.0, abs_tol=1e-8):
         points.append(round(stop_mvpp, 9))
+    if allow_zero and any(0 < point < 1 for point in points):
+        raise ValueError("100 MHz、50 Ω 下最小正幅度为 1 mVpp；请调整起点或步长。")
     return points
 
 
