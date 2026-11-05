@@ -19,7 +19,7 @@ from matplotlib import rcParams
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-from core import HARD_MAX_MVPP, analyze_stability, build_inclusive_points, efficiency_percent
+from core import analyze_stability, efficiency_percent
 from devices import (
     PM100D,
     RigolDG,
@@ -44,11 +44,29 @@ SCAN_SETTLE_S = 0.40
 SCAN_SAMPLES_PER_POINT = 5
 SCAN_SAMPLE_INTERVAL_S = 0.10
 PROBE_POSITION_DELAY_S = 5
+HARD_MAX_MVPP = 750.0
 METER_RESPONSE = 0.80  # Measured / actual; applies to BOTH measurements.
 
 
 def corrected_power_mw(raw_power_mw: float) -> float:
     return raw_power_mw / METER_RESPONSE
+
+
+def build_descending_points(start: float, stop: float, step: float) -> list[float]:
+    """Inclusive high-to-low sweep; a zero endpoint measures with RF off."""
+    if not all(math.isfinite(value) for value in (start, stop, step)):
+        raise ValueError("扫描参数必须是有限数值。")
+    if not 0 <= stop <= start <= HARD_MAX_MVPP:
+        raise ValueError("从大往小扫描：须满足 0 ≤ 终点 ≤ 起点 ≤ 750 mVpp。")
+    if step <= 0:
+        raise ValueError("扫描步长必须大于 0。")
+    count = int(math.floor((start - stop) / step + 1e-12))
+    points = [round(start - index * step, 9) for index in range(count + 1)]
+    if not math.isclose(points[-1], stop, rel_tol=0.0, abs_tol=1e-8):
+        points.append(round(stop, 9))
+    if any(0 < point < 1 for point in points):
+        raise ValueError("100 MHz、50 Ω 下最小正幅度为 1 mVpp；请调整起点或步长。")
+    return points
 
 rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei", "DejaVu Sans"]
 rcParams["axes.unicode_minus"] = False
@@ -103,8 +121,8 @@ class SimpleAOMApp:
         self.incident_stats_var = tk.StringVar(value="尚未完成入射测量（前 10 秒不计入）")
         self.accepted_var = tk.StringVar(value="尚未采用入射平均值（后 50 秒）")
         self.scan_live_var = tk.StringVar(value="Pdouble-pass = -- mW    η = -- %")
-        self.start_mvpp_var = tk.StringVar(value="0")
-        self.stop_mvpp_var = tk.StringVar(value="550")
+        self.start_mvpp_var = tk.StringVar(value="750")
+        self.stop_mvpp_var = tk.StringVar(value="0")
         self.step_mvpp_var = tk.StringVar(value="10")
         self.progress_var = tk.DoubleVar(value=0.0)
 
@@ -190,7 +208,7 @@ class SimpleAOMApp:
         self._add_entry(scan, 3, "步长 (mVpp)", self.step_mvpp_var)
         ttk.Label(
             scan,
-            text=f"固定 100 MHz；程序上限 {HARD_MAX_MVPP:g} mVpp",
+            text=f"固定 100 MHz；从大往小扫；上限 {HARD_MAX_MVPP:g} mVpp",
             foreground="#5a6570",
         ).grid(row=4, column=0, columnspan=2, sticky="w", padx=8, pady=(3, 1))
         ttk.Label(
@@ -543,7 +561,7 @@ class SimpleAOMApp:
             if not math.isfinite(value):
                 raise ValueError(f"{label}必须是有限数值。")
             values.append(value)
-        return build_inclusive_points(*values, allow_zero=True)
+        return build_descending_points(*values)
 
     def start_scan(self) -> None:
         if self.generator is None or self.power_meter is None:
@@ -564,7 +582,7 @@ class SimpleAOMApp:
             "2. AOM、反射镜和光阑都不再移动；\n"
             "3. 功放增益与供电已经固定。\n\n"
             f"确定后先等待 5 秒，再固定 100 MHz，从 {points[0]:g} 扫到 {points[-1]:g} mVpp。"
-            + ("\n0 mVpp 点将关闭 RF 测量残光。" if points[0] == 0 else "")
+            + ("\n0 mVpp 点将关闭 RF 测量残光。" if 0 in points else "")
         )
         if not messagebox.askokcancel("开始扫描", message):
             return
