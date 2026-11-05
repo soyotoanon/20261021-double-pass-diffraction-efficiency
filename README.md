@@ -1,92 +1,12 @@
-# 20261021 AOM 双程衍射效率 / AOM Double-Pass Diffraction Efficiency
+# AOM 双程衍射效率扫描
 
-2026-10-21 的 AOM double-pass 一级衍射效率随 RF 驱动幅度变化的实测数据，以及当时使用的
-简化测量界面（Tkinter + Thorlabs PM100D3 + RIGOL DG5352 Pro）。
+556 nm AOM 的双程衍射效率测量程序和实验数据。
 
-Measured double-pass first-order diffraction efficiency vs RF drive amplitude, together with the
-simplified measurement GUI used on that day.
+## 选择版本
 
-## 实验条件 / Setup
+- [原版：直接使用功率计读数](versions/original/README.md) · [启动文件](start_gui.cmd) · [程序](simple_app.py)
+- [80% 修正版：750 → 0 mVpp 降序扫描](versions/corrected80/README.md) · [启动文件](start_gui_corrected80.cmd) · [程序](simple_app_corrected80.py)
 
-| 项目 | 内容 |
-| --- | --- |
-| AOM | SGT100-556-2TA-B30，中心频率 100 MHz，工作波长 556 nm，double-pass 光路 |
-| RF 源 | RIGOL DG5352 Pro，CH1，100 MHz，经功放驱动 AOM |
-| 扫描幅度 | 300 → 550 mVpp，步长 1 mVpp（每点 5 次采样取平均） |
-| 功率计 | Thorlabs PM100D3（序列号 M01306624），556 nm |
-| 入射参考 | 1.058522 mW（60 秒入射测量的**后 50 秒**平均值，前 10 秒用于摆稳探头，不计入） |
-| 效率定义 | η = P(double-pass 输出) / P(入射参考) × 100 % |
+每个版本的测量方法、数据和说明见各自页面。所有测量文件保存在 [measurements](measurements/) 中。
 
-## 结果摘要 / Results
-
-- η(300 mVpp) = **43.72 %**
-- 峰值 η = **82.93 % @ 492 mVpp**
-- η(550 mVpp) = **78.67 %**；480–500 mVpp 区间约 82–83 %，接近平台
-- 早先一次 5 mVpp 步长的粗扫（51 点）峰值 83.97 % @ 500 mVpp，与细扫一致
-
-## 目录 / Contents
-
-| 路径 | 说明 |
-| --- | --- |
-| `simple_app.py` | 简化界面：入射功率 60 秒稳定性测量（后 50 秒统计）+ double-pass 效率实时扫描 |
-| `core.py` | 计算模块：稳定性统计、扫描点生成、效率换算 |
-| `devices.py` | 仪器驱动：Thorlabs PM100D、RIGOL DG 系列，及模拟设备 |
-| `start_gui.cmd` / `install_dependencies.cmd` / `run_self_test.cmd` | 启动、装依赖、自检 |
-| `test_core.py` / `test_scan_integration.py` | 9 项单元/集成自检 |
-| `render_table.py` | 把扫描 CSV 渲染成表格图片 |
-| `double_pass_efficiency_table.png` | 251 个扫描点的原始数据表格（图片） |
-| `ui_after_change.png` | 测量完成时的界面截图 |
-| `measurements/` | 原始数据 CSV（两次入射测量、粗扫与细扫）及细扫曲线图 |
-
-## 原始数据 / Raw data
-
-| 文件 | 内容 |
-| --- | --- |
-| `measurements/20261021_145847_incident_60s.csv` | 本次扫描采用的入射功率 60 秒记录（参考 1.058522 mW） |
-| `measurements/20261021_145022_incident_60s.csv` | 更早一次入射功率 60 秒记录（参考 1.046652 mW，未用于本次扫描） |
-| `measurements/20261021_150205_double_pass_scan.csv` | 细扫原始数据：300–550 mVpp，步长 1 mVpp，251 点 |
-| `measurements/20261021_145954_double_pass_scan.csv` | 粗扫原始数据：300–550 mVpp，步长 5 mVpp，51 点 |
-| `measurements/20261021_150205_double_pass_scan.png` | 细扫的功率/效率曲线图 |
-
-## 运行 / Run
-
-```powershell
-install_dependencies.cmd      # pip install -r requirements.txt
-start_gui.cmd                 # 打开简化界面
-run_self_test.cmd             # 跑 9 项自检
-```
-
-界面流程：先把探头放到 AOM 入射位置点“开始测量 60 秒”（前 10 秒不计入，采用后 50 秒均值），
-再把探头移到 double-pass 输出，设置起点/终点/步长后扫描；效率曲线实时更新，CSV 自动落盘到
-`measurements/`。停止、报错或关窗都会关闭 RF。
-
-## 注意 / Notes
-
-- 扫描期间不要移动 AOM、透镜、回射镜和光阑；功放增益与供电保持固定。
-- 简化模式不单独扣暗功率；若探头无光时读数相对信号不可忽略，请先在功率计上归零。
-- 这只 AOM 的额定 RF 驱动功率尚未从数据表确认，550 mVpp（约 1.76 W 功放输出）仅按实测记录保留，
-  长期工作点请以器件数据表为准。
-
-
-## 从 0 mVpp 开始扫描
-
-简化界面默认从 0 mVpp 开始。0 点通过关闭发生器 RF 测量并保存残余光功率及其相对入射功率，后续正幅度点依次开启 RF 扫描。该残光未自动扣除，不能视作严格的零光功率。100 MHz、50 Ω 条件下正幅度不得低于 1 mVpp；扫描上限仍为 550 mVpp。完整界面保持原有正起点要求。
-
-
-## 功率计 80% 响应修正版（独立版本）
-
-原版 `start_gui.cmd` / `simple_app.py` 保留原始读数。另有修正版 `start_gui_corrected80.cmd` / `simple_app_corrected80.py`：根据用户提供的条件，假设功率计读数为实际功率的 80%，入射和双程输出都按读数除以 0.80 后显示、绘图并计算效率。修正是基于固定比例的估算，实际适用性取决于该比例在本次测量范围内是否成立。
-
-同一台功率计在入射和输出位置使用相同 0.80 系数时，效率是两个修正后功率的比值，系数相消；不应再给效率额外乘 1.25。程序不自动扣除暗功率。0 mVpp 点仍为 RF 关闭时的残光测量。
-
-修正版将测量结果另存为 `*_incident_60s_corrected80.csv` 和 `*_double_pass_scan_corrected80.csv`：原功率列为修正后功率，并额外保存功率计原始读数及响应系数。只自动载入修正版自己的入射文件，不自动使用原版历史入射参考；新一轮测量应重新测入射并采用。原版、原有历史文件和固件均未改动。运行 `python -m unittest -v test_core test_scan_integration test_zero_scan test_corrected80` 可离线验证。
-
-
-## 扫描前 5 秒放置探头
-
-80% 修正版点击“开始扫描”并确认后，在 RF 关闭状态倒计时 5 秒，期间不采样、不创建扫描数据文件。倒计时结束后自动从设定的第一个点开始记录。准备期间点击停止会取消扫描；采用的入射参考保持不变。
-
-
-## 80% 修正版：750 mVpp 降序扫描
-
-修正版上限为 750 mVpp，默认起点 750、终点 0，步长填正数，按从大到小记录。当前窗口保留原步长与已采用的入射参考。确认后仍先倒计时 5 秒；最后的 0 mVpp 点关闭 RF 后测残光。原版上限和扫描行为保持不变。可用 test_descending_scan 离线验证完整降序、CSV 顺序和零点 RF 状态。
+第一次使用先运行 `install_dependencies.cmd` 安装依赖，之后运行相应的启动文件。

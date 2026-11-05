@@ -16,7 +16,7 @@ rcParams["axes.unicode_minus"] = False
 
 APP_DIR = Path(__file__).resolve().parent
 MEASUREMENT_DIR = APP_DIR / "measurements"
-OUT_PATH = APP_DIR / "double_pass_efficiency_table.png"
+OUT_PATH = MEASUREMENT_DIR / "double_pass_efficiency_table.png"
 
 
 def load_rows(path: Path) -> list[dict[str, float]]:
